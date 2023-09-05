@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
+#include <limits.h>
 
 // shamelessly stolen from programiz.com to convert binary to decimal
 long convert(long long n) {
@@ -33,27 +34,37 @@ int main(int argc, char* argv[]) {
         printf("Usage: crc_sim <g> <k> <iter>");
         return 1;
     }
-    long long g = atoll(argv[1]);
+    unsigned long long g = atoll(argv[1]);
     g = convert(g);
-    long k = atol(argv[2]);
+    unsigned long long k = atol(argv[2]);
     int iter = atoi(argv[3]);
 
-    long n = k + strlen(argv[1]) - 1;
+    unsigned long long n = k + strlen(argv[1]) - 1;
 
+    unsigned long long enc_reg = 0, dec_reg = 0;
+    
     srand(time(NULL));
-    long m = ((long) rand() * rand()) % ((long long) (1 << k));
-
-    long long c = (long long) m * g;
-    printf("m: %ld\nc: %lld\n", m, c);
-
-    printf("g: %lld\nk: %ld\niter: %d\nn: %ld\n", g, k, iter, n);
-
     int sum = 0; 
-    for (int i = 0; i < iter; i++) {
-        long long e = ((long) rand() * rand());
-        e %= (long) 1 << n;
-        // printf("e: %lld\n1 << n: %ld\nc + e: %lld\n", e, (unsigned long) 1 << n, c + e);
-        if ((long long) ((c + e) % g) != 0) sum++;   
+    for (int j = 0; j < iter; j++) {
+      for (int i = 0; i < n; i++) {
+        // generate arbitrary message bit
+        uint8_t m = rand() > 0.5 ? 1 : 0;
+        // grab next shift register bit
+        uint8_t data_out = enc_reg & 1;
+        // xor with message bit
+        uint8_t f = data_out ^ m;
+        // update encoding register
+        enc_reg = (enc_reg >> 1) ^ (f ? g : 0);
+        // get next codeword bit
+        // first k bits are message bits, next n-k bits are parity
+        uint8_t c = i < k ? m : data_out;
+        // add noise - could probably just be a random bit, it would be the same
+        c ^= rand() > INT_MAX / 2 ? 1 : 0;
+        // update decoding register
+        dec_reg = (dec_reg >> 1) ^ ((c ^ (dec_reg & 1)) ? g : 0);
+      }
+      // if an error is detected register contents are nonzero
+      if (dec_reg) sum++;
     }
     printf("sum: %d\n", sum);
     printf("%Lf\n", (long double) sum / iter);
